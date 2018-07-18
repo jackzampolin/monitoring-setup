@@ -1,0 +1,29 @@
+#!/bin/bash
+
+init-mon () {
+  if [ -z "$1" ]; then
+    echo "Input monitoring data path..."
+    exit 1
+  fi
+  local MON=$1
+  mkdir -p $MON/chronograf/data/ $MON/kapacitor/data $MON/kapacitor/config $MON/influxdb/data $MON/influxdb/config $MON/telegraf
+  mv $(pwd)/telegraf.conf $MON/telegraf/telegraf.conf
+  mv $(pwd)/influxdb.conf $MON/influxdb/config/influxdb.conf
+  mv $(pwd)/kapacitor.conf $MON/kapacitor/config/kapacitor.conf
+}
+
+commands () {
+  cat <<-EOF
+ops commands:
+  init-mon {path} -> sets config files in the proper location for the docker compose file
+EOF
+}
+
+case $1 in
+init-mon)
+  init-mon $2
+  ;;
+*)
+  commands
+  ;;
+esac

@@ -1,0 +1,85 @@
+// kapacitor define success-rate -type stream -tick test.tick -dbrp telegraf.autogen
+
+var period = 10m
+var every = 10m
+// This is number of points per period, my collection interval is 5s
+var points = 120
+var groupBy = ['service','testName']
+var outMeasurement = 'api_performance_10m'
+
+var data = stream
+    |from()
+        .database('telegraf')
+        .retentionPolicy('autogen')
+        .measurement('http_response')
+    |groupBy(groupBy)
+    |window()
+        .period(period)
+        .every(every)
+        .align()
+
+// Calculate the number of successful requests for a time period
+var success_rate = data
+    // Filter out points with unexpected status codes and with no response_string_match
+    |eval(lambda: "http_response_code" < 302 AND "response_string_match" == 1)
+        .as('response_time')
+    |count('response_time')
+        .as('count')
+    // Divide coint by expected number of points to come through filter
+    // Optional * 100 for more readable %
+    |eval(lambda: (float("count") / float(points)) * float(100))
+        .as('success_rate')
+        
+// Mean response_time in ms
+var response_time = data
+    |delete()
+        .field('response_string_match')
+        .field('http_response_code')
+    |mean('response_time')
+        .as('mean')
+    // Turn s into ms
+    |eval(lambda: "mean" * float(1000))
+        .as('res_time_ms')
+        
+// p50 response_time in ms
+var p50 = data
+    |delete()
+        .field('response_string_match')
+        .field('http_response_code')
+    |percentile('response_time', 50.0)
+        .as('p99')
+    |eval(lambda: "p99" * float(1000))
+        .as('res_time_ms')
+        
+// p95 response_time in ms
+var p95 = data
+    |delete()
+        .field('response_string_match')
+        .field('http_response_code')
+    |percentile('response_time', 95.0)
+        .as('p95')
+    |eval(lambda: "p95" * float(1000))
+        .as('res_time_ms')
+        
+// p99 response_time in ms
+var p99 = data
+    |delete()
+        .field('response_string_match')
+        .field('http_response_code')
+    |percentile('response_time', 99.0)
+        .as('p99')
+    |eval(lambda: "p99" * float(1000))
+        .as('res_time_ms')
+
+success_rate
+    |join(response_time,p50,p95,p99)
+        // Field names will be request.success_rate, mean.res_time_ms, p50.res_time_ms, p95.res_time_ms, p99.res_time_ms
+        .as('request', 'mean','p50','p95','p99')
+        .tolerance(1s)
+    |influxDBOut()
+        .create()
+        .database('telegraf_derived')
+        .retentionPolicy('autogen')
+        .measurement(outMeasurement)
+        
+        

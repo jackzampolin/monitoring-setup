@@ -1,0 +1,64 @@
+version: '3'
+services:
+  chronograf:
+    image: ${CHRONOGRAF_IMAGE}:${CHRONOGRAF_TAG}
+    restart: unless-stopped
+    volumes:
+      - ${CHRONOGRAF_DATA}:/var/lib/chronograf/
+    links:
+      - influxdb
+      - kapacitor
+    expose:
+      - "8888"
+    depends_on:
+      - kapacitor
+      - influxdb
+      - telegraf
+    environment:
+      VIRTUAL_HOST: ${CHRONOGRAF_VIRTUALHOST}
+      TOKEN_SECRET: ${CHRONOGRAF_TOKEN_SECRET}
+      GOOGLE_CLIENT_ID: ${CHRONOGRAF_GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${CHRONOGRAF_GOOGLE_CLIENT_SECRET}
+      PUBLIC_URL: ${CHRONOGRAF_PUBLIC_URL}
+      GOOGLE_DOMAINS: ${CHRONOGRAF_GOOGLE_DOMAINS}
+      LETSENCRYPT_HOST: ${CHRONOGRAF_VIRTUALHOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL} 
+      
+  telegraf:
+    image: telegraf:1.5.2
+    environment:
+      HOSTNAME: "mon1"
+    links: 
+      - influxdb
+    volumes:
+      - ${TELEGRAF_CONFIG}:/etc/telegraf/
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - influxdb
+      
+  influxdb:
+    image: ${INFLUXDB_IMAGE}:${INFLUXDB_TAG}
+    volumes:
+      - ${INFLUXDB_DATA}:/var/lib/influxdb
+      - ${INFLUXDB_CONFIG}/:/etc/influxdb/
+    expose:
+      - "8086"
+    environment:
+      VIRTUAL_HOST: ${INFLUXDB_VIRTUALHOST}
+      LETSENCRYPT_HOST: ${INFLUXDB_VIRTUALHOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL} 
+
+  kapacitor:
+    image: kapacitor:1.4.0
+    volumes:
+      - ${KAPACITOR_DATA}:/var/lib/kapacitor
+      - ${KAPACITOR_CONFIG}:/etc/kapacitor/
+    links:
+      - influxdb
+    expose:
+      - "9092"
+
+networks:
+    default:
+       external:
+         name: ${NETWORK}
